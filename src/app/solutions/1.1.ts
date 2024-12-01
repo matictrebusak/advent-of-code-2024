@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map, tap } from 'rxjs';
+import { map } from 'rxjs';
 
 @Component({
   standalone: true,
