@@ -1,13 +1,14 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs';
 
 @Component({
   standalone: true,
   selector: 'app-root',
   template: `<div>
     <div>
-      {{ 'Part 1 - Sum of multiplications: ' + sumOfMultiplications() }}
+      {{ 'Part 1 - Sum of words: ' + sumOfWords() }}
     </div>
   </div>`,
   imports: [],
@@ -15,52 +16,131 @@ import { toSignal } from '@angular/core/rxjs-interop';
 export class AppComponent {
   httpClient = inject(HttpClient);
 
-  // DATA_FILE_PATH = '/assets/3-1-test.txt';
-  DATA_FILE_PATH = '/assets/3-1.txt';
+  XMAS = 'XMAS'.split('');
 
-  parsedInput = toSignal(
-    this.httpClient.get(this.DATA_FILE_PATH, { responseType: 'text' })
+  // DATA_FILE_PATH = '/assets/4-1-test.txt';
+  DATA_FILE_PATH = '/assets/4-1.txt';
+
+  lines = toSignal(
+    this.httpClient
+      .get(this.DATA_FILE_PATH, { responseType: 'text' })
+      .pipe(map((input) => input.split('\n')))
   );
 
-  sumOfMultiplications = computed(() => {
-    let textInput = this.parsedInput()!;
-    let doesWork = this.prepareDoesItWork(textInput);
-    let total = this.extractAndMultiply(textInput, doesWork);
-    return total;
+  sumOfWords = computed(() => {
+    const dataGrid = this.prepareGrid(this.lines());
+    return this.checkNumberOfXmas(dataGrid);
   });
 
-  prepareDoesItWork(input: string): Array<boolean> {
-    if (!input) return [];
-    let regexDo = new RegExp('do\\(\\)', 'g');
-    let regexDont = new RegExp("don't\\(\\)", 'g');
-    let doInputs = [...input.matchAll(regexDo)].map((item) => item.index);
-    let dontInputs = [...input.matchAll(regexDont)].map((item) => item.index);
-    let isWorking = true;
-
-    return [...input].map((_, index) => {
-      if (doInputs.includes(index)) {
-        isWorking = true;
-      } else if (dontInputs.includes(index)) {
-        isWorking = false;
-      }
-      return isWorking;
+  prepareGrid(lines: Array<string> | undefined): Array<Array<string>> {
+    if (!lines) return [[]];
+    let grid = Array<Array<string>>();
+    lines.map((line, index) => {
+      grid[index] = line!.split('');
     });
+    return grid;
   }
 
-  extractAndMultiply(input: string, doesItWork: Array<boolean>): number {
-    let regex = new RegExp('mul\\((\\d{1,3}),(\\d{1,3})\\)', 'g');
+  checkNumberOfXmas(data: Array<Array<string>>): number {
     let total = 0;
-    let result;
 
-    while ((result = regex.exec(input))) {
-      if (doesItWork[result.index]) {
-        let [first, second] = result[0]
-          .replace('mul(', '')
-          .replace(')', '')
-          .split(',');
-        total += Number(first) * Number(second);
-      }
-    }
+    data.forEach((line, column) => {
+      line.forEach((_, row) => {
+        total += this.checkHorizontal(data, column, row);
+        total += this.checkVertical(data, column, row);
+        total += this.checkDiagonaly(data, column, row);
+      });
+    });
     return total;
+  }
+
+  checkVertical(
+    data: Array<Array<string>>,
+    column: number,
+    row: number
+  ): number {
+    let isMatch = 1;
+    let isMatchReverse = 1;
+    this.XMAS.forEach((letter, index) => {
+      const cappedColMax = Math.min(column + index, data.length - 1);
+      const cappedColMin = Math.max(column - index, 0);
+      if (data[cappedColMax][row] !== letter) {
+        isMatch = 0;
+      }
+      if (data[cappedColMin][row] !== letter) {
+        isMatchReverse = 0;
+      }
+    });
+    return isMatch + isMatchReverse;
+  }
+
+  checkHorizontal(
+    data: Array<Array<string>>,
+    column: number,
+    row: number
+  ): number {
+    let isMatch = 1;
+    let isMatchReverse = 1;
+    this.XMAS.forEach((letter, index) => {
+      const cappedRowMax = Math.min(row + index, data.length - 1);
+      const cappedRowMin = Math.max(row - index, 0);
+
+      if (data[column][cappedRowMax] !== letter) {
+        isMatch = 0;
+      }
+      if (data[column][cappedRowMin] !== letter) {
+        isMatchReverse = 0;
+      }
+    });
+    return isMatch + isMatchReverse;
+  }
+
+  checkDiagonaly(
+    data: Array<Array<string>>,
+    column: number,
+    row: number
+  ): number {
+    let isMatch = 1;
+    let isMatchReverse = 1;
+    let isMatchOtherSide = 1;
+    let isMatchOtherSideReverse = 1;
+    this.XMAS.forEach((letter, index) => {
+      const colDecreased = column - index;
+      const colIncresead = column + index;
+      const rowDecresead = row - index;
+      const rowIncresead = row + index;
+
+      if (
+        colDecreased < 0 ||
+        rowIncresead > data.length - 1 ||
+        data[colDecreased][rowIncresead] !== letter
+      ) {
+        isMatch = 0;
+      }
+      if (
+        colDecreased < 0 ||
+        rowDecresead < 0 ||
+        data[colDecreased][rowDecresead] !== letter
+      ) {
+        isMatchReverse = 0;
+      }
+      if (
+        colIncresead > data.length - 1 ||
+        rowIncresead > data.length - 1 ||
+        data[colIncresead][rowIncresead] !== letter
+      ) {
+        isMatchOtherSide = 0;
+      }
+      if (
+        colIncresead > data.length - 1 ||
+        rowDecresead > data.length - 1 ||
+        data[colIncresead][rowDecresead] !== letter
+      ) {
+        isMatchOtherSideReverse = 0;
+      }
+    });
+    return (
+      isMatch + isMatchReverse + isMatchOtherSide + isMatchOtherSideReverse
+    );
   }
 }
