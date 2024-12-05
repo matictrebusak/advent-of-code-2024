@@ -3,12 +3,16 @@ import { Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
+interface Section {
+  rules: Map<number, Array<number>>;
+  orders: Array<Array<number>>;
+}
 @Component({
   standalone: true,
   selector: 'app-root',
   template: `<div>
     <div>
-      {{ 'Part 1 - Sum of words: ' + sumOfWords() }}
+      {{ 'Part 1 - Sum of middle page numbers: ' + sumOfMiddlePageNumbers() }}
     </div>
   </div>`,
   imports: [],
@@ -16,169 +20,75 @@ import { map } from 'rxjs';
 export class AppComponent {
   httpClient = inject(HttpClient);
 
-  XMAS = 'XMAS'.split('');
-  MAS = 'MAS'.split('');
+  // DATA_FILE_PATH = '/assets/5-1-test.txt';
+  DATA_FILE_PATH = '/assets/5-1.txt';
 
-  // DATA_FILE_PATH = '/assets/4-1-test.txt';
-  DATA_FILE_PATH = '/assets/4-1.txt';
-
-  lines = toSignal(
+  sections = toSignal(
     this.httpClient
       .get(this.DATA_FILE_PATH, { responseType: 'text' })
-      .pipe(map((input) => input.split('\n')))
+      .pipe(map((input) => input.split('\n\n')))
   );
 
-  sumOfWords = computed(() => {
-    const dataGrid = this.prepareGrid(this.lines());
-    return this.checkNumberOfXmas(dataGrid);
-  });
-
-  prepareGrid(lines: Array<string> | undefined): Array<Array<string>> {
-    if (!lines) return [[]];
-    let grid = Array<Array<string>>();
-    lines.map((line, index) => {
-      grid[index] = line!.split('');
-    });
-    return grid;
-  }
-
-  checkNumberOfXmas(data: Array<Array<string>>): number {
-    let total = 0;
-
-    data.forEach((line, column) => {
-      line.forEach((_, row) => {
-        // total += this.checkHorizontal(data, column, row);
-        // total += this.checkVertical(data, column, row);
-        // total += this.checkDiagonaly(data, column, row);
-        total += this.checkXShapedMas(data, column, row);
-      });
-    });
-    return total;
-  }
-
-  checkVertical(
-    data: Array<Array<string>>,
-    column: number,
-    row: number
-  ): number {
-    let isMatch = 1;
-    let isMatchReverse = 1;
-    this.XMAS.forEach((letter, index) => {
-      const cappedColMax = Math.min(column + index, data.length - 1);
-      const cappedColMin = Math.max(column - index, 0);
-      if (data[cappedColMax][row] !== letter) {
-        isMatch = 0;
-      }
-      if (data[cappedColMin][row] !== letter) {
-        isMatchReverse = 0;
-      }
-    });
-    return isMatch + isMatchReverse;
-  }
-
-  checkHorizontal(
-    data: Array<Array<string>>,
-    column: number,
-    row: number
-  ): number {
-    let isMatch = 1;
-    let isMatchReverse = 1;
-    this.XMAS.forEach((letter, index) => {
-      const cappedRowMax = Math.min(row + index, data.length - 1);
-      const cappedRowMin = Math.max(row - index, 0);
-
-      if (data[column][cappedRowMax] !== letter) {
-        isMatch = 0;
-      }
-      if (data[column][cappedRowMin] !== letter) {
-        isMatchReverse = 0;
-      }
-    });
-    return isMatch + isMatchReverse;
-  }
-
-  checkDiagonaly(
-    data: Array<Array<string>>,
-    column: number,
-    row: number
-  ): number {
-    let isMatch = 1;
-    let isMatchReverse = 1;
-    let isMatchOtherSide = 1;
-    let isMatchOtherSideReverse = 1;
-    this.XMAS.forEach((letter, index) => {
-      const colDecreased = column - index;
-      const colIncresead = column + index;
-      const rowDecresead = row - index;
-      const rowIncresead = row + index;
-
-      if (
-        colDecreased < 0 ||
-        rowIncresead > data.length - 1 ||
-        data[colDecreased][rowIncresead] !== letter
-      ) {
-        isMatch = 0;
-      }
-      if (
-        colDecreased < 0 ||
-        rowDecresead < 0 ||
-        data[colDecreased][rowDecresead] !== letter
-      ) {
-        isMatchReverse = 0;
-      }
-      if (
-        colIncresead > data.length - 1 ||
-        rowIncresead > data.length - 1 ||
-        data[colIncresead][rowIncresead] !== letter
-      ) {
-        isMatchOtherSide = 0;
-      }
-      if (
-        colIncresead > data.length - 1 ||
-        rowDecresead > data.length - 1 ||
-        data[colIncresead][rowDecresead] !== letter
-      ) {
-        isMatchOtherSideReverse = 0;
-      }
-    });
-    return (
-      isMatch + isMatchReverse + isMatchOtherSide + isMatchOtherSideReverse
-    );
-  }
-
-  checkXShapedMas(
-    data: Array<Array<string>>,
-    column: number,
-    row: number
-  ): number {
-    let centerLetter = data[column][row];
-    if (centerLetter !== 'A') {
+  sumOfMiddlePageNumbers = computed(() => {
+    if (this.sections()) {
+      const section = this.prepareSections(this.sections()!);
+      return this.checkUpdates(section);
+    } else {
       return 0;
     }
-    const colDecreased = column - 1;
-    const colIncresead = column + 1;
-    const rowDecresead = row - 1;
-    const rowIncresead = row + 1;
+  });
 
-    if (
-      colDecreased < 0 ||
-      colIncresead > data.length - 1 ||
-      rowDecresead < 0 ||
-      rowIncresead > data.length - 1
-    )
-      return 0;
+  prepareSections(sections: Array<string>): Section {
+    if (!sections)
+      return { rules: new Map<number, Array<number>>(), orders: [] };
+    const rules = this.prepareRules(sections[0]);
+    const orders = this.prepareOrder(sections[1]);
+    return { rules, orders };
+  }
 
-    const isOneDiagonal =
-      (data[colDecreased][rowDecresead] === 'M' &&
-        data[colIncresead][rowIncresead] === 'S') ||
-      (data[colDecreased][rowDecresead] === 'S' &&
-        data[colIncresead][rowIncresead] === 'M');
-    const isOtherDiagonal =
-      (data[colDecreased][rowIncresead] === 'M' &&
-        data[colIncresead][rowDecresead] === 'S') ||
-      (data[colDecreased][rowIncresead] === 'S' &&
-        data[colIncresead][rowDecresead] === 'M');
+  prepareRules(ruleSection: string): Map<number, Array<number>> {
+    const rules = new Map<number, Array<number>>();
+    const rulesInput = ruleSection.split('\n').map((rule) => rule.split('|'));
+    rulesInput.forEach((rule) => {
+      const newRule = +rule[0];
 
-    return isOneDiagonal && isOtherDiagonal ? 1 : 0;
+      if (rules.has(newRule)) {
+        rules.get(newRule)!.push(+rule[1]);
+      } else {
+        rules.set(+rule[0], [+rule[1]]);
+      }
+    });
+    return rules;
+  }
+
+  prepareOrder(orderSection: string): Array<Array<number>> {
+    return orderSection
+      .split('\n')
+      .map((order) => order.split(',').map((page) => +page));
+  }
+
+  checkUpdates(section: Section): number {
+    let updateNumber = 0;
+    section.orders.forEach((order) => {
+      updateNumber += this.checkUpdate(order, section.rules);
+    });
+    return updateNumber;
+  }
+
+  checkUpdate(order: Array<number>, rules: Map<number, Array<number>>): number {
+    for (let i = 0; i < order.length; i++) {
+      const page = +order[i];
+      const orderToThisPage = order.slice(0, i);
+      const pagesThatShouldBeBefore = rules.get(page) ?? [];
+      if (
+        pagesThatShouldBeBefore.find(
+          (pageThatShouldBeBefore) =>
+            orderToThisPage.indexOf(pageThatShouldBeBefore) !== -1
+        )
+      ) {
+        return 0;
+      }
+    }
+    return order[(order.length - 1) / 2];
   }
 }
