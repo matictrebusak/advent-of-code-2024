@@ -16,8 +16,8 @@ import { map } from 'rxjs';
 export class AppComponent {
   httpClient = inject(HttpClient);
 
-  DATA_FILE_PATH = '/assets/7-1-test.txt';
-  // DATA_FILE_PATH = '/assets/7-1.txt';
+  // DATA_FILE_PATH = '/assets/7-1-test.txt';
+  DATA_FILE_PATH = '/assets/7-1.txt';
 
   lines = toSignal(
     this.httpClient
@@ -41,34 +41,21 @@ export class AppComponent {
     let [tempResult, tempOperands] = line.split(': ');
     let operands = tempOperands.split(' ').map((operand) => +operand);
     const result = +tempResult;
-    // console.log('Line:', line);
     const operatorsArray: Array<any> = this.getOperators(operands.length - 1);
     for (let j = 0; j < operatorsArray.length; j++) {
       let total = operands[0];
       for (let i = 0; i < operands.length - 1; i++) {
-        // console.log('total', total);
-        // console.log('operands[i + 1]', operands[i + 1]);
         total = operatorsArray[j][i](total, operands[i + 1]);
       }
       if (total === result) {
-        // console.log('line is GOOD, adding ' + result);
         return result;
       }
     }
-    // console.log('LINE IS BAD');
     return 0;
   }
 
-  add(a: number, b: number): number {
-    return a + b;
-  }
-
-  multiply(a: number, b: number): number {
-    return a * b;
-  }
-
   getOperators(numberOfOperatorsRequired: number): Array<Array<any>> {
-    const operators = [this.add, this.multiply];
+    const operators = [this.add, this.multiply, this.combine];
     let operatorsArray = Array<Array<any>>();
     for (
       let index = 0;
@@ -80,10 +67,27 @@ export class AppComponent {
           .toString(operators.length)
           .padStart(numberOfOperatorsRequired, '0')
           .split('')
-          .map((operator) => (operator === '0' ? this.add : this.multiply))
+          .map((operator) =>
+            operator === '0'
+              ? this.add
+              : operator === '1'
+              ? this.multiply
+              : this.combine
+          )
       );
     }
-    // console.log('operatorsArray', operatorsArray);
     return operatorsArray;
+  }
+
+  add(a: number, b: number): number {
+    return a + b;
+  }
+
+  multiply(a: number, b: number): number {
+    return a * b;
+  }
+
+  combine(a: number, b: number): number {
+    return +(a.toString() + b.toString());
   }
 }
