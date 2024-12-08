@@ -26,7 +26,7 @@ enum PositionValue {
   selector: 'app-root',
   template: `<div>
     <div>
-      {{ 'Part 1 - Path length: ' + computePath() }}
+      {{ 'Part 1 - Path length: ' + result }}
     </div>
   </div>`,
   imports: [],
@@ -36,11 +36,14 @@ export class AppComponent {
 
   direction = Direction.UP;
 
+  result = 0;
+
   path = new Map<string, number>();
+  potentitalObstacles = new Map<string, number>();
   pathWithDirection = new Array<string>();
 
-  DATA_FILE_PATH = '/assets/6-1-test.txt';
-  // DATA_FILE_PATH = '/assets/6-1.txt';
+  // DATA_FILE_PATH = '/assets/6-1-test.txt';
+  DATA_FILE_PATH = '/assets/6-1.txt';
 
   lines = toSignal(
     this.httpClient
@@ -53,21 +56,56 @@ export class AppComponent {
     return this.readGrid(this.lines()!);
   });
 
-  computePath = computed(() => {
+  constructor() {
+    setTimeout(() => {
+      this.computePath();
+      console.log('this.path', this.path);
+
+      this.path.forEach((value, key) => {
+        let [x, y] = key.split(' ');
+        console.log('Replacing', x, y);
+        let result = this.computePath(true, {
+          X: parseInt(x),
+          Y: parseInt(y),
+        });
+        console.log('result', result);
+        if (result === -1) {
+          this.potentitalObstacles.set(`${x} ${y}`, 1);
+        }
+      });
+      this.result = this.potentitalObstacles.size;
+      console.log('this.potentitalObstacles', this.potentitalObstacles);
+    }, 100);
+  }
+
+  computePath(ignoreSetPath = false, fakeObstacle?: Coordinate): number {
     if (this.grid().length > 1) {
       let currentPosition: Coordinate | null = this.findStart();
-      this.setPath(currentPosition);
-      console.log('this.path', this.path.size);
-      console.log('currentPosition', currentPosition);
-      while (currentPosition) {
-        currentPosition = this.takeAStep(currentPosition);
+      if (!ignoreSetPath) {
+        this.setPath(currentPosition);
+      }
+
+      let safety = 20000;
+      console.log('fakeObstacle', fakeObstacle);
+
+      while (currentPosition && safety > 0) {
+        currentPosition = this.takeAStep(
+          currentPosition!,
+          ignoreSetPath,
+          fakeObstacle
+        );
+        safety--;
+      }
+      if (safety === 0) {
+        console.log('looped');
+        return -1;
       }
       console.log('this.path', this.path);
       return this.path.size;
     } else {
       return 0;
     }
-  });
+  }
 
   readGrid(lines: Array<string>): Array<Array<string>> {
     const grid = new Array<Array<string>>();
@@ -86,6 +124,8 @@ export class AppComponent {
       }
     });
     console.log('startIndex', startIndex);
+    this.direction = Direction.UP;
+
     return startIndex;
   }
 
@@ -93,8 +133,13 @@ export class AppComponent {
     this.direction = (this.direction + 1) % 4;
   }
 
-  takeAStep(currentPosition: Coordinate): Coordinate | null {
+  takeAStep(
+    currentPosition: Coordinate,
+    ignoreSetPath: boolean,
+    fakeObstacle?: Coordinate
+  ): Coordinate | null {
     let stepCandidate: Coordinate;
+
     switch (this.direction) {
       case Direction.UP:
         stepCandidate = { X: currentPosition.X, Y: currentPosition.Y - 1 };
@@ -110,11 +155,16 @@ export class AppComponent {
         break;
     }
 
-    const candidatePositionValue = this.getPositionValue(stepCandidate);
+    // console.log('stepCandidate', stepCandidate);
+    const candidatePositionValue = this.getPositionValue(
+      stepCandidate,
+      fakeObstacle
+    );
     if (candidatePositionValue === PositionValue.NORMAL) {
       currentPosition = stepCandidate;
-      this.setPath(currentPosition);
-      console.log('currentPosition', currentPosition);
+      if (!ignoreSetPath) {
+        this.setPath(currentPosition);
+      }
     } else if (candidatePositionValue === PositionValue.OBSTACLE) {
       this.takeATurn();
     } else if (candidatePositionValue === PositionValue.OUTSIDE) {
@@ -123,7 +173,10 @@ export class AppComponent {
     return currentPosition;
   }
 
-  getPositionValue(position: Coordinate): PositionValue {
+  getPositionValue(
+    position: Coordinate,
+    fakeObstacle?: Coordinate
+  ): PositionValue {
     if (
       position.X < 0 ||
       position.Y < 0 ||
@@ -131,7 +184,10 @@ export class AppComponent {
       position.Y >= this.grid().length
     ) {
       return PositionValue.OUTSIDE;
-    } else if (this.grid()[position.Y][position.X] === '#') {
+    } else if (
+      this.grid()[position.Y][position.X] === '#' ||
+      (fakeObstacle?.X === position.X && fakeObstacle?.Y === position.Y)
+    ) {
       return PositionValue.OBSTACLE;
     } else {
       return PositionValue.NORMAL;
@@ -139,18 +195,7 @@ export class AppComponent {
   }
 
   setPath(currentPosition: Coordinate) {
-    const entry = `x:${currentPosition.X} y:${currentPosition.Y}`;
+    const entry = `${currentPosition.X} ${currentPosition.Y}`;
     this.path.set(entry, 1);
-  }
-
-  checkPotentialObsticles() {
-    this.path.forEach((_value, key) => {
-      const coordinates = key.split(' ');
-      const x = parseInt(coordinates[0].split(':')[1]);
-      const y = parseInt(coordinates[1].split(':')[1]);
-      if (this.grid()[y][x] === '#') {
-        console.log('Obstacle found at x:', x, 'y:', y);
-      }
-    });
   }
 }
