@@ -3,30 +3,12 @@ import { Component, computed, inject, Signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
-enum Direction {
-  UP = 0,
-  RIGHT = 1,
-  DOWN = 2,
-  LEFT = 3,
-}
-
-interface Coordinate {
-  X: number;
-  Y: number;
-}
-
-enum PositionValue {
-  NORMAL,
-  OBSTACLE,
-  OUTSIDE,
-}
-
 @Component({
   standalone: true,
   selector: 'app-root',
   template: `<div>
     <div>
-      {{ 'Part 1 - Path length: ' + result }}
+      {{ 'Part 1 - Path computeFreeSpace: ' + computeFreeSpace }}
     </div>
   </div>`,
   imports: [],
@@ -34,168 +16,86 @@ enum PositionValue {
 export class AppComponent {
   httpClient = inject(HttpClient);
 
-  direction = Direction.UP;
-
-  result = 0;
-
-  path = new Map<string, number>();
-  potentitalObstacles = new Map<string, number>();
-  pathWithDirection = new Array<string>();
-
-  // DATA_FILE_PATH = '/assets/6-1-test.txt';
-  DATA_FILE_PATH = '/assets/6-1.txt';
+  // DATA_FILE_PATH = '/assets/9-1-test.txt';
+  DATA_FILE_PATH = '/assets/9-1.txt';
 
   lines = toSignal(
     this.httpClient
       .get(this.DATA_FILE_PATH, { responseType: 'text' })
-      .pipe(map((input) => input.split('\n')))
+      .pipe(map((input) => input.split('')))
   );
 
-  grid: Signal<Array<Array<string>>> = computed(() => {
-    if (!this.lines()) return [[]];
-    return this.readGrid(this.lines()!);
-  });
+  computeFreeSpace: Signal<number> = computed(() => {
+    if (!this.lines()) return 0;
+    let newLine: Array<string> = [];
+    let characthers = this.lines()!;
+    console.log('characthers', characthers);
+    console.log('characthers.length', characthers.length);
+    for (let i = 0; i < characthers.length; i += 2) {
+      let index = i / 2;
+      let diskMap: number = +characthers[i];
+      let freeSpace = +characthers[i + 1];
+      // console.log('diskMap', diskMap);
+      // console.log('freeSpace', freeSpace);
+      // console.log('index', index);
+      let diskMapFormatted = diskMap
+        ? new Array<string>(diskMap).fill(index.toString())
+        : [];
+      let freeSpaceFormatted = freeSpace
+        ? new Array<string>(freeSpace).fill('.')
+        : [];
+      // console.log('diskMapFormatted', diskMapFormatted);
+      // console.log('freeSpaceFormatted', freeSpaceFormatted);
+      newLine = newLine.concat(diskMapFormatted, freeSpaceFormatted);
+    }
 
-  constructor() {
-    setTimeout(() => {
-      this.computePath();
-      console.log('this.path', this.path);
+    console.log('newLine ', newLine);
 
-      this.path.forEach((value, key) => {
-        let [x, y] = key.split(' ');
-        console.log('Replacing', x, y);
-        let result = this.computePath(true, {
-          X: parseInt(x),
-          Y: parseInt(y),
-        });
-        console.log('result', result);
-        if (result === -1) {
-          this.potentitalObstacles.set(`${x} ${y}`, 1);
+    const numberOfDots = newLine.filter((char) => char === '.')?.length;
+    console.log('Number of dots', numberOfDots);
+
+    const numbersWithoutDots = newLine.filter((char) => char !== '.');
+    console.log('numbersWithoutDots', numbersWithoutDots.length);
+
+    const numbersToInsert = numbersWithoutDots.reverse().slice(0, numberOfDots);
+    console.log('Number numbersToInsert', numbersToInsert);
+
+    const sortedNewLine = newLine.map((char) => {
+      if (char === '.' && numbersToInsert?.length > 0) {
+        const numberToInsert = numbersToInsert.splice(0, 1)?.[0];
+        return numberToInsert;
+      } else {
+        return char;
+      }
+    });
+
+    console.log('sorted new line', sortedNewLine);
+
+    const sum = sortedNewLine
+      .slice(0, numbersWithoutDots.length)
+      // .filter((char) => char !== '.')
+      .map((char) => {
+        const cc = +char;
+        if (isNaN(cc)) {
+          return 0;
+        } else return cc;
+      })
+      .map((char) => {
+        // console.log('char' + char);
+        if (isNaN(char)) {
         }
-      });
-      this.result = this.potentitalObstacles.size;
-      console.log('this.potentitalObstacles', this.potentitalObstacles);
-    }, 100);
-  }
+        return char;
+      })
+      .reduce((acc, curr, index) => {
+        // console.log('acc', acc);
+        // console.log('curr*index', curr * index);
+        if (isNaN(curr)) {
+          // console.log('index', index);
+        }
+        return acc + curr * index;
+      }, 0);
 
-  computePath(ignoreSetPath = false, fakeObstacle?: Coordinate): number {
-    if (this.grid().length > 1) {
-      let currentPosition: Coordinate | null = this.findStart();
-      if (!ignoreSetPath) {
-        this.setPath(currentPosition);
-      }
-
-      let safety = 20000;
-      console.log('fakeObstacle', fakeObstacle);
-
-      while (currentPosition && safety > 0) {
-        currentPosition = this.takeAStep(
-          currentPosition!,
-          ignoreSetPath,
-          fakeObstacle
-        );
-        safety--;
-      }
-      if (safety === 0) {
-        console.log('looped');
-        return -1;
-      }
-      console.log('this.path', this.path);
-      return this.path.size;
-    } else {
-      return 0;
-    }
-  }
-
-  readGrid(lines: Array<string>): Array<Array<string>> {
-    const grid = new Array<Array<string>>();
-    lines.forEach((line) => {
-      grid.push(line.split(''));
-    });
-    return grid;
-  }
-
-  findStart(): Coordinate {
-    let startIndex: Coordinate = { X: 0, Y: 0 };
-    this.grid().forEach((row, rowIndex) => {
-      let cellIndex = row.findIndex((cell) => cell === '^');
-      if (cellIndex !== -1) {
-        startIndex = { X: cellIndex, Y: rowIndex };
-      }
-    });
-    console.log('startIndex', startIndex);
-    this.direction = Direction.UP;
-
-    return startIndex;
-  }
-
-  takeATurn() {
-    this.direction = (this.direction + 1) % 4;
-  }
-
-  takeAStep(
-    currentPosition: Coordinate,
-    ignoreSetPath: boolean,
-    fakeObstacle?: Coordinate
-  ): Coordinate | null {
-    let stepCandidate: Coordinate;
-
-    switch (this.direction) {
-      case Direction.UP:
-        stepCandidate = { X: currentPosition.X, Y: currentPosition.Y - 1 };
-        break;
-      case Direction.RIGHT:
-        stepCandidate = { X: currentPosition.X + 1, Y: currentPosition.Y };
-        break;
-      case Direction.DOWN:
-        stepCandidate = { X: currentPosition.X, Y: currentPosition.Y + 1 };
-        break;
-      case Direction.LEFT:
-        stepCandidate = { X: currentPosition.X - 1, Y: currentPosition.Y };
-        break;
-    }
-
-    // console.log('stepCandidate', stepCandidate);
-    const candidatePositionValue = this.getPositionValue(
-      stepCandidate,
-      fakeObstacle
-    );
-    if (candidatePositionValue === PositionValue.NORMAL) {
-      currentPosition = stepCandidate;
-      if (!ignoreSetPath) {
-        this.setPath(currentPosition);
-      }
-    } else if (candidatePositionValue === PositionValue.OBSTACLE) {
-      this.takeATurn();
-    } else if (candidatePositionValue === PositionValue.OUTSIDE) {
-      return null;
-    }
-    return currentPosition;
-  }
-
-  getPositionValue(
-    position: Coordinate,
-    fakeObstacle?: Coordinate
-  ): PositionValue {
-    if (
-      position.X < 0 ||
-      position.Y < 0 ||
-      position.X >= this.grid()[0].length ||
-      position.Y >= this.grid().length
-    ) {
-      return PositionValue.OUTSIDE;
-    } else if (
-      this.grid()[position.Y][position.X] === '#' ||
-      (fakeObstacle?.X === position.X && fakeObstacle?.Y === position.Y)
-    ) {
-      return PositionValue.OBSTACLE;
-    } else {
-      return PositionValue.NORMAL;
-    }
-  }
-
-  setPath(currentPosition: Coordinate) {
-    const entry = `${currentPosition.X} ${currentPosition.Y}`;
-    this.path.set(entry, 1);
-  }
+    console.log('sum', sum);
+    return sum;
+  });
 }
