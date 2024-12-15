@@ -3,12 +3,23 @@ import { Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
+interface Coordinate {
+  x: number;
+  y: number;
+}
+
+enum DataType {
+  A,
+  B,
+  PRIZE,
+}
+
 @Component({
   standalone: true,
   selector: 'app-root',
   template: `<div>
     <div>
-      {{ 'Part 1 - Number of stones: ' + sumOfStones() }}
+      {{ 'Part 1 - Number of Tokens: ' + sumOfTokens() }}
     </div>
   </div>`,
   imports: [],
@@ -16,44 +27,78 @@ import { map } from 'rxjs';
 export class AppComponent {
   httpClient = inject(HttpClient);
 
-  // DATA_FILE_PATH = '/assets/11-1-test.txt';
-  DATA_FILE_PATH = '/assets/11-1.txt';
+  // DATA_FILE_PATH = '/assets/13-1-test.txt';
+  DATA_FILE_PATH = '/assets/13-1.txt';
 
   lines = toSignal(
     this.httpClient
       .get(this.DATA_FILE_PATH, { responseType: 'text' })
-      .pipe(map((input) => input.split(' ').map((char) => +char)))
+      .pipe(map((input) => input.split('\n')))
   );
 
-  sumOfStones = computed(() => {
-    let stones = this.lines()!;
-    if (!stones) return 0;
-
-    const numberOfLoops = 25;
-    for (let i = 0; i < numberOfLoops; i++) {
-      stones = this.blink(stones);
-      console.log('Number of loops: ' + ((i + 1) / 25) * 100 + '%');
+  sumOfTokens = computed(() => {
+    const data = this.prepareData(this.lines());
+    let sumOfTokens = 0;
+    if (data && data!.get(DataType.A)) {
+      const dataLength = data!.get(DataType.A)!.length;
+      console.log('length ' + dataLength);
+      for (let i = 0; i < dataLength; i++) {
+        const tokens = this.calculateTokensForPrize(
+          data!.get(DataType.A)![i],
+          data!.get(DataType.B)![i],
+          data!.get(DataType.PRIZE)![i]
+        );
+        console.log('tokens', tokens);
+        sumOfTokens += tokens ?? 0;
+      }
+      console.log('sumOfTokens ', sumOfTokens);
+      return sumOfTokens;
+    } else {
+      return 0;
     }
-
-    return stones?.length;
   });
 
-  blink(stones: Array<number>): Array<number> {
-    stones = stones.flatMap((stone) => {
-      const stoneString = stone.toString();
-      if (stone === 0) {
-        return [1];
-      } else if (stoneString.length % 2 === 0) {
-        const len = stoneString.length / 2;
+  calculateTokensForPrize(
+    a: Coordinate,
+    b: Coordinate,
+    prize: Coordinate
+  ): number {
+    const solutions = [];
+    for (let i = 0; i < 100; i++) {
+      for (let j = 0; j < 100; j++) {
+        let x = a.x * i + b.x * j;
+        let y = a.y * i + b.y * j;
+        if (x === prize.x && y === prize.y) {
+          solutions.push(i * 3 + j);
+        }
+      }
+    }
+    return solutions.sort()[0];
+  }
 
-        const first = +stoneString.slice(0, len);
-        const second = +stoneString.slice(len);
-        return [first, second];
-      } else {
-        return [stone * 2024];
+  prepareData(
+    lines: Array<string> | undefined
+  ): Map<DataType, Array<Coordinate>> {
+    let data = new Map<DataType, Array<Coordinate>>();
+    if (!lines) return data;
+
+    lines.forEach((line, index) => {
+      let [x, y] = line
+        .split(',')
+        .map((element) => +element.replace(/\D/g, ''));
+      const coordinate = { x, y };
+      const rest = index % 4;
+      if (rest !== 3) {
+        const type =
+          rest === 0 ? DataType.A : rest === 1 ? DataType.B : DataType.PRIZE;
+        if (data.has(type)) {
+          data.get(type)!.push(coordinate);
+        } else {
+          data.set(type, [coordinate]);
+        }
       }
     });
-    // console.log('stones', stones);
-    return stones;
+    console.log('data', data);
+    return data;
   }
 }
