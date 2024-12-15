@@ -8,7 +8,7 @@ import { map } from 'rxjs';
   selector: 'app-root',
   template: `<div>
     <div>
-      {{ 'Part 1 - Sum Of trailheads: ' + sumOfTrailHeads() }}
+      {{ 'Part 1 - Number of stones: ' + sumOfStones() }}
     </div>
   </div>`,
   imports: [],
@@ -16,72 +16,44 @@ import { map } from 'rxjs';
 export class AppComponent {
   httpClient = inject(HttpClient);
 
-  // DATA_FILE_PATH = '/assets/10-1-test.txt';
-  DATA_FILE_PATH = '/assets/10-1.txt';
-
-  listOfPeaks: Array<Array<number>> = [[]];
+  // DATA_FILE_PATH = '/assets/11-1-test.txt';
+  DATA_FILE_PATH = '/assets/11-1.txt';
 
   lines = toSignal(
     this.httpClient
       .get(this.DATA_FILE_PATH, { responseType: 'text' })
-      .pipe(map((input) => input.split('\n')))
+      .pipe(map((input) => input.split(' ').map((char) => +char)))
   );
 
-  sumOfTrailHeads = computed(() => {
-    const dataGrid = this.prepareGrid(this.lines());
-    let sum = 0;
-    for (let i = 0; i < dataGrid.length; i++) {
-      for (let j = 0; j < dataGrid[i].length; j++) {
-        if (dataGrid[i][j] === 0) {
-          console.log('Progress: ' + (i / dataGrid.length) * 100 + '%');
-          this.listOfPeaks = [[]];
-          const sumToAdd = this.calculateTrails(dataGrid, i, j, 1);
-          sum += sumToAdd;
-        }
-      }
+  sumOfStones = computed(() => {
+    let stones = this.lines()!;
+    if (!stones) return 0;
+
+    const numberOfLoops = 25;
+    for (let i = 0; i < numberOfLoops; i++) {
+      stones = this.blink(stones);
+      console.log('Number of loops: ' + ((i + 1) / 25) * 100 + '%');
     }
-    console.log('sum', sum);
-    return sum;
+
+    return stones?.length;
   });
 
-  prepareGrid(lines: Array<string> | undefined): Array<Array<number>> {
-    if (!lines) return [[]];
-    let grid = Array<Array<number>>();
-    lines.map((line, index) => {
-      grid[index] = line!.split('').map((char) => +char);
-    });
-    return grid;
-  }
+  blink(stones: Array<number>): Array<number> {
+    stones = stones.flatMap((stone) => {
+      const stoneString = stone.toString();
+      if (stone === 0) {
+        return [1];
+      } else if (stoneString.length % 2 === 0) {
+        const len = stoneString.length / 2;
 
-  calculateTrails(
-    dataGrid: Array<Array<number>>,
-    i: number,
-    j: number,
-    nextNumber: number
-  ): number {
-    let up = dataGrid[Math.max(i - 1, 0)][j];
-    let left = dataGrid[i][Math.max(j - 1, 0)];
-    let down = dataGrid[Math.min(i + 1, dataGrid[0].length - 1)][j];
-    let right = dataGrid[i][Math.min(j + 1, dataGrid.length - 1)];
-    let trailSum = 0;
-    if (up === nextNumber) {
-      trailSum += this.calculateTrails(dataGrid, i - 1, j, nextNumber + 1);
-    }
-    if (left === nextNumber) {
-      trailSum += this.calculateTrails(dataGrid, i, j - 1, nextNumber + 1);
-    }
-    if (down === nextNumber) {
-      trailSum += this.calculateTrails(dataGrid, i + 1, j, nextNumber + 1);
-    }
-    if (right === nextNumber) {
-      trailSum += this.calculateTrails(dataGrid, i, j + 1, nextNumber + 1);
-    }
-    if (nextNumber === 10) {
-      // && !this.listOfPeaks.find((element) => element[0] === i && element[1] === j)
-      // this.listOfPeaks.push([i, j]);
-      return trailSum + 1;
-    } else {
-      return trailSum;
-    }
+        const first = +stoneString.slice(0, len);
+        const second = +stoneString.slice(len);
+        return [first, second];
+      } else {
+        return [stone * 2024];
+      }
+    });
+    // console.log('stones', stones);
+    return stones;
   }
 }
