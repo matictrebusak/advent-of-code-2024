@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, computed, inject, Signal } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
@@ -8,7 +8,7 @@ import { map } from 'rxjs';
   selector: 'app-root',
   template: `<div>
     <div>
-      {{ 'Part 1 - Path computeFreeSpace: ' + computeFreeSpaceFirstPart() }}
+      {{ 'Part 1 - Sum Of trailheads: ' + sumOfTrailHeads() }}
     </div>
   </div>`,
   imports: [],
@@ -16,109 +16,88 @@ import { map } from 'rxjs';
 export class AppComponent {
   httpClient = inject(HttpClient);
 
-  // DATA_FILE_PATH = '/assets/9-1-test.txt';
-  DATA_FILE_PATH = '/assets/9-1.txt';
+  // DATA_FILE_PATH = '/assets/10-1-test.txt';
+  DATA_FILE_PATH = '/assets/10-1.txt';
+
+  listOfPeaks: Array<Array<number>> = [[]];
 
   lines = toSignal(
     this.httpClient
       .get(this.DATA_FILE_PATH, { responseType: 'text' })
-      .pipe(map((input) => input.split('')))
+      .pipe(map((input) => input.split('\n')))
   );
 
-  computeFreeSpace: Signal<number> = computed(() => {
-    if (!this.lines()) return 0;
-    let newLine: Array<string> = [];
-    let characthers = this.lines()!;
-    for (let i = 0; i < characthers.length; i += 2) {
-      let index = i / 2;
-      let diskMap: number = +characthers[i];
-      let freeSpace = +characthers[i + 1];
-      let diskMapFormatted = diskMap
-        ? new Array<string>(diskMap).fill(index.toString())
-        : [];
-      let freeSpaceFormatted = freeSpace
-        ? new Array<string>(freeSpace).fill('.')
-        : [];
-      newLine = newLine.concat(diskMapFormatted, freeSpaceFormatted);
-    }
-    const numberOfDots = newLine.filter((char) => char === '.')?.length;
-    const numbersWithoutDots = newLine.filter((char) => char !== '.');
-    const numbersToInsert = numbersWithoutDots.reverse().slice(0, numberOfDots);
-
-    const sortedNewLine = newLine.map((char) => {
-      if (char === '.' && numbersToInsert?.length > 0) {
-        const numberToInsert = numbersToInsert.splice(0, 1)?.[0];
-        return numberToInsert;
-      } else {
-        return char;
+  sumOfTrailHeads = computed(() => {
+    const dataGrid = this.prepareGrid(this.lines());
+    let sum = 0;
+    let trailHeadNumber = 1;
+    for (let i = 0; i < dataGrid.length; i++) {
+      for (let j = 0; j < dataGrid[i].length; j++) {
+        if (dataGrid[i][j] === 0) {
+          // console.log('Trailhead number: ', trailHeadNumber++);
+          console.log('Progress: ' + (i / dataGrid.length) * 100 + '%');
+          this.listOfPeaks = [[]];
+          const sumToAdd = this.calculateTrails(dataGrid, i, j, 1);
+          // console.log('TrailHead sum to add', sumToAdd);
+          sum += sumToAdd;
+        }
       }
+    }
+    console.log('sum', sum);
+    return sum;
+  });
+
+  prepareGrid(lines: Array<string> | undefined): Array<Array<number>> {
+    if (!lines) return [[]];
+    let grid = Array<Array<number>>();
+    lines.map((line, index) => {
+      grid[index] = line!.split('').map((char) => +char);
     });
-    const sum = sortedNewLine
-      .slice(0, numbersWithoutDots.length)
-      .map((char) => +char)
-      .reduce((acc, curr, index) => {
-        return acc + curr * index;
-      }, 0);
+    return grid;
+  }
 
-    return sum;
-  });
-
-  computeFreeSpaceFirstPart: Signal<number> = computed(() => {
-    if (!this.lines()) return 0;
-    let newLine: Array<string> = [];
-    let characthers = this.lines()!;
-    for (let i = 0; i < characthers.length; i += 2) {
-      let index = i / 2;
-      let diskMap: number = +characthers[i];
-      let freeSpace = +characthers[i + 1];
-      let diskMapFormatted = diskMap
-        ? new Array<string>(diskMap).fill(index.toString())
-        : [];
-      let freeSpaceFormatted = freeSpace
-        ? new Array<string>(freeSpace).fill('.')
-        : [];
-      newLine = newLine.concat(diskMapFormatted, freeSpaceFormatted);
+  calculateTrails(
+    dataGrid: Array<Array<number>>,
+    i: number,
+    j: number,
+    nextNumber: number
+  ): number {
+    let up = dataGrid[Math.max(i - 1, 0)][j];
+    let left = dataGrid[i][Math.max(j - 1, 0)];
+    let down = dataGrid[Math.min(i + 1, dataGrid[0].length - 1)][j];
+    let right = dataGrid[i][Math.min(j + 1, dataGrid.length - 1)];
+    let trailSum = 0;
+    // console.log('currentPosition i: ' + i + ' j: ' + j);
+    // console.log('nextNumber ', nextNumber);
+    // console.log('up, left, down, right', up, left, down, right);
+    // console.log('left', left);
+    // console.log('down', down);
+    // console.log('right', right);
+    if (up === nextNumber) {
+      // console.log('going UP with nextNumber ' + (nextNumber + 1));
+      trailSum += this.calculateTrails(dataGrid, i - 1, j, nextNumber + 1);
     }
-    const numbersWithoutDots = newLine.filter((char) => char !== '.');
-    const numbersToInsert = numbersWithoutDots.reverse();
-    for (let i = 0; i < numbersToInsert.length; i++) {
-      let lengthOfGroup = 1;
-      while (numbersToInsert[i] === numbersToInsert[i + lengthOfGroup]) {
-        lengthOfGroup++;
-      }
-      i = i + lengthOfGroup - 1;
-
-      const indexOfInsertion = newLine.findIndex((_, index) => {
-        let canWrite = true;
-        for (let j = 0; j < lengthOfGroup; j++) {
-          if (newLine[index + j] !== '.') {
-            canWrite = false;
-          }
-        }
-        return canWrite;
-      });
-
-      const origIndex = newLine?.findIndex(
-        (char) => char === numbersToInsert[i]
-      );
-
-      if (indexOfInsertion !== -1 && origIndex > indexOfInsertion) {
-        for (let k = 0; k < lengthOfGroup; k++) {
-          newLine[indexOfInsertion + k] = numbersToInsert[i];
-          newLine[origIndex + k] = '.';
-        }
-      }
+    if (left === nextNumber) {
+      // console.log('going LEFT with nextNumber ' + (nextNumber + 1));
+      trailSum += this.calculateTrails(dataGrid, i, j - 1, nextNumber + 1);
     }
-
-    const sum = newLine
-      .map((char) => +char)
-      .reduce((acc, curr, index) => {
-        if (isNaN(curr)) {
-          return acc;
-        }
-        return acc + curr * index;
-      }, 0);
-
-    return sum;
-  });
+    if (down === nextNumber) {
+      // console.log('going DOWN with nextNumber ' + (nextNumber + 1));
+      trailSum += this.calculateTrails(dataGrid, i + 1, j, nextNumber + 1);
+    }
+    if (right === nextNumber) {
+      // console.log('going RIGHT with nextNumber ' + (nextNumber + 1));
+      trailSum += this.calculateTrails(dataGrid, i, j + 1, nextNumber + 1);
+    }
+    if (
+      nextNumber === 10 &&
+      !this.listOfPeaks.find((element) => element[0] === i && element[1] === j)
+    ) {
+      this.listOfPeaks.push([i, j]);
+      // console.log('trailSum increase to ', trailSum + 1);
+      return trailSum + 1;
+    } else {
+      return trailSum;
+    }
+  }
 }
